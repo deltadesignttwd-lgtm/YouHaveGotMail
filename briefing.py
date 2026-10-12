@@ -12,10 +12,6 @@ import requests
 
 FEEDS = [
     "https://anchor.fm/s/f380feb4/podcast/rss",  # 我要做富翁 podcast (new episode every 2 weeks)
-    # Paused for now; remove the # to turn back on.
-    # "https://feeds.bbci.co.uk/news/world/rss.xml",
-    # "https://www.norges-bank.no/en/rss-feeds/Press-releases---Norges-Bank/",
-    # "https://www.norges-bank.no/en/rss-feeds/Articles-and-chronicles---Norges-Bank/",  # rarely updated
 ]
 MAX_PER_FEED = 10
 MAX_AGE_DAYS = 14  # ignore anything published longer ago than this

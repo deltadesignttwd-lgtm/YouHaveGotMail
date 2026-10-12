@@ -33,6 +33,7 @@ Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is 
 ## Customising
 
 - **Feeds**: edit the `FEEDS` list in `briefing.py`.
+- **How far back**: `MAX_AGE_DAYS` in `briefing.py` (default 7). Older articles are never sent.
 - **Time**: change `SEND_HOUR` in `briefing.py` *and* the two cron lines in the workflow
   (they are the UTC hours that equal your London hour in summer and in winter).
 

@@ -22,23 +22,7 @@ LOG_HEADER = ["date", "source", "title", "link", "published"]
 MAX_PER_FEED = 10
 MAX_AGE_DAYS = 14  # ignore anything published longer ago than this
 TIMEZONE = ZoneInfo("Europe/London")
-SEND_HOUR = 8  # local London time
 TELEGRAM_LIMIT = 4000  # Telegram caps messages at 4096 chars
-
-
-def should_run(now):
-    """The workflow fires at 07:00 and 08:00 UTC; only the one matching 08:00 London today should send.
-
-    Decided from which cron fired (not the clock), so a late-starting run never doubles up.
-    """
-    if os.environ.get("FORCE_RUN") == "true":
-        return True
-    schedule = os.environ.get("SCHEDULE", "")
-    if not schedule:
-        return now.hour == SEND_HOUR
-    utc_hour = int(schedule.split()[1])
-    offset_hours = int(now.utcoffset().total_seconds() // 3600)
-    return utc_hour + offset_hours == SEND_HOUR
 
 
 def published_at(entry):
@@ -148,10 +132,6 @@ def send_telegram(text):
 
 def main():
     now = datetime.datetime.now(TIMEZONE)
-    if not should_run(now):
-        print(f"Not the {SEND_HOUR}:00 London slot today (London time {now:%H:%M}), skipping.")
-        return
-
     gc = gspread.service_account_from_dict(json.loads(os.environ["GOOGLE_CREDS"]))
     spreadsheet = gc.open_by_key(os.environ["SHEET_ID"])
     feeds, warnings = load_feeds(spreadsheet)

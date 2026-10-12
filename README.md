@@ -5,6 +5,7 @@ the **Feeds** tab of your Google Sheet, sends any new items to you on **Telegram
 Items already in the sheet are never sent twice.
 
 Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is needed.
+The daily start is triggered by a free [cron-job.org](https://cron-job.org) job (see below).
 
 ## One-time setup
 
@@ -28,7 +29,6 @@ Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is 
    | `GOOGLE_CREDS` | Entire contents of the JSON key file    |
 
 4. **Test**: Actions tab → *Daily Briefing* → **Run workflow**. Manual runs always send immediately.
-   The workflow must be on the default branch for the daily schedule to run.
 
 ## Customising
 
@@ -42,10 +42,20 @@ Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is 
   Add a row to follow a feed, set `on` to `no` to pause it, delete the row to remove it.
   Changes apply on the next run. Your record of sent items stays in the first tab.
 - **How far back**: `MAX_AGE_DAYS` in `briefing.py` (default 14). Older articles are never sent.
-- **Time**: change `SEND_HOUR` in `briefing.py` *and* the two cron lines in the workflow
-  (they are the UTC hours that equal your London hour in summer and in winter).
+- **Time**: edit the job's schedule in cron-job.org. No code change needed.
 
 ## Notes
 
-- GitHub scheduled runs can start a few minutes to ~30 min late.
-- GitHub disables schedules after 60 days without repo activity; re-enable from the Actions tab.
+## Daily trigger (cron-job.org)
+
+GitHub's built-in schedule is not used. A cron-job.org job calls GitHub every day at
+08:00 (time zone Europe/London):
+
+- **URL**: `https://api.github.com/repos/deltadesignttwd-lgtm/YouHaveGotMail/actions/workflows/briefing.yml/dispatches`
+- **Method**: `POST`, **body**: `{"ref":"main"}`
+- **Headers**: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
+  `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
+- **Token**: a fine-grained GitHub token limited to this repo with *Actions: Read and write*.
+  When it expires, create a new one and paste it into the job's Authorization header.
+
+A successful call returns status **204** and appears in the Actions tab as "Manually run".

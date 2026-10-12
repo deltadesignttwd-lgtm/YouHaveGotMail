@@ -11,7 +11,8 @@ import gspread
 import requests
 
 FEEDS = [
-    "https://www.norges-bank.no/en/rss-feeds/Articles-and-chronicles---Norges-Bank/",
+    "https://www.norges-bank.no/en/rss-feeds/Press-releases---Norges-Bank/",
+    "https://www.norges-bank.no/en/rss-feeds/Articles-and-chronicles---Norges-Bank/",  # rarely updated
 ]
 MAX_PER_FEED = 10
 MAX_AGE_DAYS = 7  # ignore anything published longer ago than this

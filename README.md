@@ -1,7 +1,7 @@
 # YouHaveGotMail
 
-A daily briefing bot. Every morning at **08:00 London time** it reads the RSS feeds in
-`briefing.py`, sends any new items to you on **Telegram**, and adds them as rows in a **Google Sheet**.
+A daily briefing bot. Every morning at **08:00 London time** it reads the RSS feeds listed in
+the **Feeds** tab of your Google Sheet, sends any new items to you on **Telegram**, and adds them as rows in a **Google Sheet**.
 Items already in the sheet are never sent twice.
 
 Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is needed.
@@ -32,7 +32,15 @@ Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is 
 
 ## Customising
 
-- **Feeds**: edit the `FEEDS` list in `briefing.py`.
+- **Feeds**: edit the **Feeds** tab of your Google Sheet. No code changes needed.
+  The bot creates this tab on its first run. Columns:
+
+  | url | name | on |
+  |---|---|---|
+  | the RSS link | optional label shown in Telegram | `yes` / blank = on, `no` = paused |
+
+  Add a row to follow a feed, set `on` to `no` to pause it, delete the row to remove it.
+  Changes apply on the next run. Your record of sent items stays in the first tab.
 - **How far back**: `MAX_AGE_DAYS` in `briefing.py` (default 14). Older articles are never sent.
 - **Time**: change `SEND_HOUR` in `briefing.py` *and* the two cron lines in the workflow
   (they are the UTC hours that equal your London hour in summer and in winter).

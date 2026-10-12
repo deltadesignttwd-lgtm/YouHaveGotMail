@@ -1,0 +1,8 @@
+# Never commit credentials. Put them in GitHub Secrets instead.
+*.json
+.env
+.env.*
+
+__pycache__/
+.venv/
+venv/

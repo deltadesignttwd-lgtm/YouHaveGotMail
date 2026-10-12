@@ -10,9 +10,15 @@ import feedparser
 import gspread
 import requests
 
-FEEDS = [
-    "https://anchor.fm/s/f380feb4/podcast/rss",  # 我要做富翁 podcast (new episode every 2 weeks)
+# The feed list lives in the "Feeds" tab of the Google Sheet (columns: url | name | on).
+# The bot creates that tab on first run and fills it with these starting feeds.
+FEEDS_TAB = "Feeds"
+FEEDS_HEADER = ["url", "name", "on"]
+STARTING_FEEDS = [
+    ["https://anchor.fm/s/f380feb4/podcast/rss", "我要做富翁", "yes"],
 ]
+OFF_VALUES = {"no", "n", "off", "false", "0", "pause", "paused"}
+LOG_HEADER = ["date", "source", "title", "link", "published"]
 MAX_PER_FEED = 10
 MAX_AGE_DAYS = 14  # ignore anything published longer ago than this
 TIMEZONE = ZoneInfo("Europe/London")
@@ -52,14 +58,50 @@ def recent_entries(entries, now, max_age_days=MAX_AGE_DAYS):
     return [e for _, e in fresh]
 
 
+def parse_feed_rows(values):
+    """Turn the Feeds tab's cells into (url, name) pairs that are switched on, plus warnings.
+
+    Blank rows are ignored; a blank "on" cell counts as on, so pasting a link is enough.
+    """
+    feeds, warnings = [], []
+    for row in values[1:]:  # skip header
+        url, name, on = (list(row) + ["", "", ""])[:3]
+        url, name, on = url.strip(), name.strip(), on.strip().lower()
+        if not url or on in OFF_VALUES:
+            continue
+        if not url.startswith(("http://", "https://")):
+            warnings.append(f"⚠️ Not a web link in the {FEEDS_TAB} tab: {escape(url)}")
+            continue
+        feeds.append((url, name))
+    return feeds, warnings
+
+
+def load_feeds(spreadsheet):
+    """Read the Feeds tab, creating it with STARTING_FEEDS if it doesn't exist yet."""
+    try:
+        tab = spreadsheet.worksheet(FEEDS_TAB)
+    except gspread.WorksheetNotFound:
+        tab = spreadsheet.add_worksheet(title=FEEDS_TAB, rows=100, cols=len(FEEDS_HEADER))
+        tab.append_rows([FEEDS_HEADER] + STARTING_FEEDS, value_input_option="RAW")
+    return parse_feed_rows(tab.get_all_values())
+
+
+def log_worksheet(spreadsheet):
+    """The record of sent items: the first tab that isn't the Feeds tab."""
+    for tab in spreadsheet.worksheets():
+        if tab.title != FEEDS_TAB:
+            return tab
+    return spreadsheet.add_worksheet(title="Log", rows=1000, cols=len(LOG_HEADER))
+
+
 def collect(feeds, seen, today, now):
     rows, sections = [], []
-    for url in feeds:
+    for url, name in feeds:
         feed = feedparser.parse(url, agent="Mozilla/5.0 (DailyBriefingBot)")
         if feed.bozo and not feed.entries:
-            sections.append(f"⚠️ Could not read feed: {url}")
+            sections.append(f"⚠️ Could not read feed: {escape(name or url)}")
             continue
-        source = feed.feed.get("title", url)
+        source = name or feed.feed.get("title", url)
         candidates = recent_entries(feed.entries, now)
         new = [e for e in candidates if e.get("link") and e.link not in seen][:MAX_PER_FEED]
         if not new:
@@ -111,16 +153,23 @@ def main():
         return
 
     gc = gspread.service_account_from_dict(json.loads(os.environ["GOOGLE_CREDS"]))
-    ws = gc.open_by_key(os.environ["SHEET_ID"]).sheet1
+    spreadsheet = gc.open_by_key(os.environ["SHEET_ID"])
+    feeds, warnings = load_feeds(spreadsheet)
+    ws = log_worksheet(spreadsheet)
     if not ws.row_values(1):
-        ws.append_row(["date", "source", "title", "link", "published"])
+        ws.append_row(LOG_HEADER)
     seen = set(ws.col_values(4))
 
     today = now.date().isoformat()
-    rows, sections = collect(FEEDS, seen, today, now)
+    rows, sections = collect(feeds, seen, today, now)
+    sections = warnings + sections
 
     header = f"📰 <b>Daily Briefing – {today}</b>"
-    body = "\n\n".join(sections) if sections else "No new items today."
+    if not feeds:
+        sections.append(f"No feeds are switched on. Add links to the {FEEDS_TAB} tab of your Google Sheet.")
+    elif not rows:
+        sections.append("No new items today.")
+    body = "\n\n".join(sections)
     send_telegram(f"{header}\n\n{body}")
 
     if rows:

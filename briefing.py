@@ -24,7 +24,6 @@ LOG_HEADER = ["date", "source", "title", "link", "published"]
 MAX_PER_FEED = 10
 MAX_AGE_DAYS = 14  # ignore anything published longer ago than this
 TIMEZONE = ZoneInfo("Europe/London")
-TELEGRAM_LIMIT = 4000  # Telegram caps messages at 4096 chars
 
 
 def published_at(entry):
@@ -56,7 +55,7 @@ def parse_feed_rows(values):
         if not url or on in OFF_VALUES:
             continue
         if not url.startswith(("http://", "https://")):
-            warnings.append(f"⚠️ Not a web link in the {FEEDS_TAB} tab: {escape(url)}")
+            warnings.append(f"Not a web link in the {FEEDS_TAB} tab: {url}")
             continue
         feeds.append((url, name))
     return feeds, warnings
@@ -81,58 +80,21 @@ def log_worksheet(spreadsheet):
 
 
 def collect(feeds, seen, today, now):
-    """New items across feeds: (sheet rows, Telegram message sections, items for the reading page)."""
-    rows, sections, items = [], [], []
+    """New items across feeds: (sheet rows, items for the reading page, warnings)."""
+    rows, items, warnings = [], [], []
     for url, name in feeds:
         feed = feedparser.parse(url, agent="Mozilla/5.0 (DailyBriefingBot)")
         if feed.bozo and not feed.entries:
-            sections.append(f"⚠️ Could not read feed: {escape(name or url)}")
+            warnings.append(f"Could not read feed: {name or url}")
             continue
         source = name or feed.feed.get("title", url)
         candidates = recent_entries(feed.entries, now)
         new = [e for e in candidates if e.get("link") and e.link not in seen][:MAX_PER_FEED]
-        if not new:
-            continue
-        lines = [f"<b>{escape(source)}</b>"]
         for e in new:
-            lines.append(f'• <a href="{escape(e.link)}">{escape(e.get("title", e.link))}</a>')
             rows.append([today, source, e.get("title", ""), e.link, e.get("published", "")])
             items.append({"entry": e, "source": source, "title": e.get("title", e.link),
                           "link": e.link, "published": e.get("published", "")})
-        sections.append("\n".join(lines))
-    return rows, sections, items
-
-
-def escape(text):
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-
-
-def chunk(text, limit=TELEGRAM_LIMIT):
-    """Split on line boundaries so no message exceeds Telegram's limit."""
-    chunks, current = [], ""
-    for line in text.split("\n"):
-        if current and len(current) + len(line) + 1 > limit:
-            chunks.append(current)
-            current = ""
-        current = f"{current}\n{line}" if current else line
-    if current:
-        chunks.append(current)
-    return chunks
-
-
-def send_telegram(text):
-    for part in chunk(text):
-        resp = requests.post(
-            f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendMessage",
-            json={
-                "chat_id": os.environ["TG_CHAT_ID"],
-                "text": part,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
+    return rows, items, warnings
 
 
 def send_telegram_file(filename, content, caption):
@@ -156,27 +118,21 @@ def main():
     seen = set(ws.col_values(4))
 
     today = now.date().isoformat()
-    rows, sections, items = collect(feeds, seen, today, now)
-    sections = warnings + sections
-
-    header = f"📰 <b>Daily Briefing – {today}</b>"
+    rows, items, feed_warnings = collect(feeds, seen, today, now)
+    warnings += feed_warnings
     if not feeds:
-        sections.append(f"No feeds are switched on. Add links to the {FEEDS_TAB} tab of your Google Sheet.")
-    elif not rows:
-        sections.append("No new items today.")
-    body = "\n\n".join(sections)
-    send_telegram(f"{header}\n\n{body}")
+        warnings.append(f"No feeds are switched on. Add links to the {FEEDS_TAB} tab of your Google Sheet.")
 
+    # The reading page is the whole briefing; it is sent every day, even with nothing new.
+    page = reader.build_page(reader.add_bodies(items), today, warnings)
+    count = f"{len(items)} new item{'s' if len(items) != 1 else ''}" if items else "No new items today"
+    send_telegram_file(f"briefing-{today}.html", page.encode("utf-8"),
+                       f"📰 Daily Briefing – {today} · {count}. Tap to open.")
+
+    # Recorded only after sending, so a failed send is retried tomorrow instead of lost.
     if rows:
         ws.append_rows(rows, value_input_option="RAW")
-    print(f"Sent briefing with {len(rows)} new item(s).")
-
-    # Recorded in the sheet first, so a failure here can't cause repeats tomorrow.
-    if items:
-        page = reader.build_page(reader.add_bodies(items), today)
-        send_telegram_file(f"briefing-{today}.html", page.encode("utf-8"),
-                           "📖 Full text of today's articles. Tap to open.")
-        print(f"Sent reading page ({len(page) // 1024} KB).")
+    print(f"Sent reading page with {len(items)} new item(s), {len(page) // 1024} KB.")
 
 
 if __name__ == "__main__":

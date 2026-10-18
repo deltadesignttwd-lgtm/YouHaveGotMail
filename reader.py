@@ -81,6 +81,7 @@ h2 { font-size: 1.35rem; line-height: 1.35; margin: 0 0 .25rem; }
 a { color: var(--link); }
 .meta, .note, nav li span { color: var(--muted); font-size: .9rem; }
 .note { font-style: italic; }
+.warn { border-left: 3px solid #d97706; padding: .25rem .75rem; font-size: .95rem; }
 nav ol { padding-left: 1.25rem; }
 nav li { margin: .35rem 0; }
 article { border-top: 1px solid var(--rule); margin-top: 2.5rem; padding-top: 1.5rem; }
@@ -89,7 +90,7 @@ article p { margin: 0 0 1em; overflow-wrap: anywhere; }
 """
 
 
-def build_page(items, today):
+def build_page(items, today, warnings=()):
     """One self-contained HTML page with a contents list and every article in full."""
     esc = html.escape
     toc, articles = [], []
@@ -112,7 +113,9 @@ def build_page(items, today):
 <p><a href="{esc(item["link"])}">Open original ↗</a> · <a class="top" href="#top">Back to top ↑</a></p>
 </article>""")
 
-    count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
+    count = f"{len(items)} new item{'s' if len(items) != 1 else ''}" if items else "No new items today."
+    notices = "\n".join(f'<p class="warn">⚠️ {esc(w)}</p>' for w in warnings)
+    contents = f"<nav><ol>\n{chr(10).join(toc)}\n</ol></nav>" if toc else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -125,9 +128,8 @@ def build_page(items, today):
 <main id="top">
 <h1>Daily Briefing – {esc(today)}</h1>
 <p class="meta">{count}</p>
-<nav><ol>
-{chr(10).join(toc)}
-</ol></nav>
+{notices}
+{contents}
 {chr(10).join(articles)}
 </main>
 </body>

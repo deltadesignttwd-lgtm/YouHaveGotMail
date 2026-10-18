@@ -22,6 +22,10 @@ STARTING_FEEDS = [
 OFF_VALUES = {"no", "n", "off", "false", "0", "pause", "paused"}
 LOG_HEADER = ["date", "source", "title", "link", "published"]
 MAX_PER_FEED = 10
+# Items whose link contains any of these are ignored (never sent or recorded).
+SKIP_LINKS = [
+    "bloomberg.com/news/videos/",  # video clips: no article text to read
+]
 MAX_AGE_DAYS = 14  # ignore anything published longer ago than this
 TIMEZONE = ZoneInfo("Europe/London")
 
@@ -79,6 +83,10 @@ def log_worksheet(spreadsheet):
     return spreadsheet.add_worksheet(title="Log", rows=1000, cols=len(LOG_HEADER))
 
 
+def skipped(link):
+    return any(pattern in link for pattern in SKIP_LINKS)
+
+
 def collect(feeds, seen, today, now):
     """New items across feeds: (sheet rows, items for the reading page, warnings)."""
     rows, items, warnings = [], [], []
@@ -89,7 +97,8 @@ def collect(feeds, seen, today, now):
             continue
         source = name or feed.feed.get("title", url)
         candidates = recent_entries(feed.entries, now)
-        new = [e for e in candidates if e.get("link") and e.link not in seen][:MAX_PER_FEED]
+        new = [e for e in candidates if e.get("link") and e.link not in seen and not skipped(e.link)]
+        new = new[:MAX_PER_FEED]
         for e in new:
             rows.append([today, source, e.get("title", ""), e.link, e.get("published", "")])
             items.append({"entry": e, "source": source, "title": e.get("title", e.link),

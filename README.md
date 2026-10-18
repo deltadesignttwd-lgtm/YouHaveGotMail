@@ -4,6 +4,12 @@ A daily briefing bot. Every morning at **08:00 London time** it reads the RSS fe
 the **Feeds** tab of your Google Sheet, sends any new items to you on **Telegram**, and adds them as rows in a **Google Sheet**.
 Items already in the sheet are never sent twice.
 
+Along with the headline message, it sends a **reading page**: an HTML file in Telegram
+(`briefing-YYYY-MM-DD.html`) with the full text of every new article, extracted with
+[trafilatura](https://trafilatura.readthedocs.io/). Tap the file to open it in your browser.
+Paywalled or blocked pages fall back to the feed's summary, and podcast episodes show their
+show notes. The page is sent privately to your chat and never published.
+
 Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is needed.
 The daily start is triggered by a free [cron-job.org](https://cron-job.org) job (see below).
 

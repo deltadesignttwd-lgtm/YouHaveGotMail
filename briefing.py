@@ -10,6 +10,8 @@ import feedparser
 import gspread
 import requests
 
+import reader
+
 # The feed list lives in the "Feeds" tab of the Google Sheet (columns: url | name | on).
 # The bot creates that tab on first run and fills it with these starting feeds.
 FEEDS_TAB = "Feeds"
@@ -79,7 +81,8 @@ def log_worksheet(spreadsheet):
 
 
 def collect(feeds, seen, today, now):
-    rows, sections = [], []
+    """New items across feeds: (sheet rows, Telegram message sections, items for the reading page)."""
+    rows, sections, items = [], [], []
     for url, name in feeds:
         feed = feedparser.parse(url, agent="Mozilla/5.0 (DailyBriefingBot)")
         if feed.bozo and not feed.entries:
@@ -94,8 +97,10 @@ def collect(feeds, seen, today, now):
         for e in new:
             lines.append(f'• <a href="{escape(e.link)}">{escape(e.get("title", e.link))}</a>')
             rows.append([today, source, e.get("title", ""), e.link, e.get("published", "")])
+            items.append({"entry": e, "source": source, "title": e.get("title", e.link),
+                          "link": e.link, "published": e.get("published", "")})
         sections.append("\n".join(lines))
-    return rows, sections
+    return rows, sections, items
 
 
 def escape(text):
@@ -130,6 +135,16 @@ def send_telegram(text):
         resp.raise_for_status()
 
 
+def send_telegram_file(filename, content, caption):
+    resp = requests.post(
+        f"https://api.telegram.org/bot{os.environ['TG_TOKEN']}/sendDocument",
+        data={"chat_id": os.environ["TG_CHAT_ID"], "caption": caption[:1024]},
+        files={"document": (filename, content, "text/html")},
+        timeout=60,
+    )
+    resp.raise_for_status()
+
+
 def main():
     now = datetime.datetime.now(TIMEZONE)
     gc = gspread.service_account_from_dict(json.loads(os.environ["GOOGLE_CREDS"]))
@@ -141,7 +156,7 @@ def main():
     seen = set(ws.col_values(4))
 
     today = now.date().isoformat()
-    rows, sections = collect(feeds, seen, today, now)
+    rows, sections, items = collect(feeds, seen, today, now)
     sections = warnings + sections
 
     header = f"📰 <b>Daily Briefing – {today}</b>"
@@ -155,6 +170,13 @@ def main():
     if rows:
         ws.append_rows(rows, value_input_option="RAW")
     print(f"Sent briefing with {len(rows)} new item(s).")
+
+    # Recorded in the sheet first, so a failure here can't cause repeats tomorrow.
+    if items:
+        page = reader.build_page(reader.add_bodies(items), today)
+        send_telegram_file(f"briefing-{today}.html", page.encode("utf-8"),
+                           "📖 Full text of today's articles. Tap to open.")
+        print(f"Sent reading page ({len(page) // 1024} KB).")
 
 
 if __name__ == "__main__":

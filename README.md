@@ -48,6 +48,9 @@ The daily start is triggered by a free [cron-job.org](https://cron-job.org) job 
 
   Add a row to follow a feed, set `on` to `no` to pause it, delete the row to remove it.
   Changes apply on the next run. Your record of sent items stays in the first tab.
+- **How many**: at most 20 items a day (`MAX_PER_DAY` in `briefing.py`), at most 10 per feed.
+  Feeds take turns, newest first, so one busy feed can't crowd out the others.
+  Items over the limit aren't recorded and can still appear on a later day.
 - **How far back**: `MAX_AGE_DAYS` in `briefing.py` (default 14). Older articles are never sent.
 - **Time**: edit the job's schedule in cron-job.org. No code change needed.
 

@@ -22,6 +22,7 @@ STARTING_FEEDS = [
 OFF_VALUES = {"no", "n", "off", "false", "0", "pause", "paused"}
 LOG_HEADER = ["date", "source", "title", "link", "published"]
 MAX_PER_FEED = 10
+MAX_PER_DAY = 20  # across all feeds; feeds take turns so a busy one can't crowd out the rest
 # Items whose link contains any of these are ignored (never sent or recorded).
 SKIP_LINKS = [
     "bloomberg.com/news/videos/",  # video clips: no article text to read
@@ -87,22 +88,39 @@ def skipped(link):
     return any(pattern in link for pattern in SKIP_LINKS)
 
 
+def take_turns(per_feed, limit):
+    """Pick up to limit items, one from each feed in turn (newest first), keeping feed order."""
+    picked, depth = [], 0
+    while len(picked) < limit and any(depth < len(entries) for entries in per_feed):
+        for feed_no, entries in enumerate(per_feed):
+            if depth < len(entries) and len(picked) < limit:
+                picked.append((feed_no, depth))
+        depth += 1
+    return [per_feed[f][d] for f, d in sorted(picked)]
+
+
 def collect(feeds, seen, today, now):
     """New items across feeds: (sheet rows, items for the reading page, warnings)."""
-    rows, items, warnings = [], [], []
+    per_feed, warnings, taken = [], [], set()
     for url, name in feeds:
         feed = feedparser.parse(url, agent="Mozilla/5.0 (DailyBriefingBot)")
         if feed.bozo and not feed.entries:
             warnings.append(f"Could not read feed: {name or url}")
             continue
         source = name or feed.feed.get("title", url)
-        candidates = recent_entries(feed.entries, now)
-        new = [e for e in candidates if e.get("link") and e.link not in seen and not skipped(e.link)]
-        new = new[:MAX_PER_FEED]
-        for e in new:
-            rows.append([today, source, e.get("title", ""), e.link, e.get("published", "")])
-            items.append({"entry": e, "source": source, "title": e.get("title", e.link),
-                          "link": e.link, "published": e.get("published", "")})
+        new = []
+        for e in recent_entries(feed.entries, now):
+            link = e.get("link")
+            if link and link not in seen and link not in taken and not skipped(link):
+                taken.add(link)
+                new.append((source, e))
+        per_feed.append(new[:MAX_PER_FEED])
+
+    rows, items = [], []
+    for source, e in take_turns(per_feed, MAX_PER_DAY):
+        rows.append([today, source, e.get("title", ""), e.link, e.get("published", "")])
+        items.append({"entry": e, "source": source, "title": e.get("title", e.link),
+                      "link": e.link, "published": e.get("published", "")})
     return rows, items, warnings
 
 

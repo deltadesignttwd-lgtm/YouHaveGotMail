@@ -1,14 +1,15 @@
 # YouHaveGotMail
 
 A daily briefing bot. Every morning at **08:00 London time** it reads the RSS feeds listed in
-the **Feeds** tab of your Google Sheet, sends any new items to you on **Telegram**, and adds them as rows in a **Google Sheet**.
-Items already in the sheet are never sent twice.
-
-Along with the headline message, it sends a **reading page**: an HTML file in Telegram
+the **Feeds** tab of your Google Sheet and sends you **one file on Telegram**: a reading page
 (`briefing-YYYY-MM-DD.html`) with the full text of every new article, extracted with
 [trafilatura](https://trafilatura.readthedocs.io/). Tap the file to open it in your browser.
-Paywalled or blocked pages fall back to the feed's summary, and podcast episodes show their
-show notes. The page is sent privately to your chat and never published.
+
+- Paywalled or blocked pages fall back to the feed's summary; podcast episodes show their show notes.
+- Problems (a broken feed link, a cell that isn't a link) appear as notices at the top of the page.
+- On days with nothing new, the file still arrives and says "No new items today".
+- Each item is recorded as a row in the Google Sheet once the file is delivered, and is never sent twice.
+- The page goes privately to your chat and is never published.
 
 Runs free on GitHub Actions (`.github/workflows/briefing.yml`), so no server is needed.
 The daily start is triggered by a free [cron-job.org](https://cron-job.org) job (see below).
